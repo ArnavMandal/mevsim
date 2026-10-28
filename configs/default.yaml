@@ -1,0 +1,19 @@
+# Core simulator parameters (see SPEC.md section 2).
+gas_limit: 30
+n_agents: 3
+organic_rate: 6.0          # lambda: mean organic txs per block
+organic_gas_min: 1
+organic_gas_max: 4
+organic_fee_scale: 1.0     # median organic fee per gas at zero congestion
+organic_fee_sigma: 0.5     # lognormal sigma of organic fees
+congestion_sensitivity: 0.5
+congestion_smoothing: 0.3  # EMA weight on the newest congestion reading
+opportunity_rate: 0.8      # mu: mean MEV opportunities per block
+opportunity_value_scale: 5.0
+opportunity_value_alpha: 2.5  # Pareto tail index (smaller = heavier tail)
+opportunity_ttl: 2         # blocks an opportunity stays capturable after arrival
+agent_tx_gas: 2
+initial_balance: 100.0
+p_see: 0.8
+obs_noise_std: 0.1
+top_k: 5

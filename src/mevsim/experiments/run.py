@@ -12,17 +12,15 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import yaml
 
-from mevsim.agents import make_agent
 from mevsim.core.config import SimConfig
-from mevsim.core.sim import Simulator
+from mevsim.episode import seeded_episode
 from mevsim.metrics import EpisodeRecorder
 
 
@@ -47,10 +45,7 @@ class ExperimentConfig:
         unknown = set(d) - known
         if unknown:
             raise ValueError(f"unknown experiment keys: {sorted(unknown)}")
-        sim = SimConfig()
-        if "sim_config" in d:
-            sim = SimConfig.from_yaml(_resolve(path, d["sim_config"]))
-        sim = SimConfig.from_dict({**sim.to_dict(), **(d.get("sim_overrides") or {})})
+        sim = load_sim_config(path, d)
         seeds = d.get("seeds", 10)
         seeds = list(range(seeds)) if isinstance(seeds, int) else list(seeds)
         agents = {k: v or {} for k, v in d["agents"].items()}
@@ -73,6 +68,14 @@ class ExperimentConfig:
         }
 
 
+def load_sim_config(config_path: Path, d: dict[str, Any]) -> SimConfig:
+    """SimConfig from an experiment dict's `sim_config` file plus `sim_overrides`."""
+    sim = SimConfig()
+    if "sim_config" in d:
+        sim = SimConfig.from_yaml(_resolve(config_path, d["sim_config"]))
+    return SimConfig.from_dict({**sim.to_dict(), **(d.get("sim_overrides") or {})})
+
+
 def _resolve(config_path: Path, ref: str) -> Path:
     """Resolve a referenced file relative to the CWD, falling back to the config's folder."""
     p = Path(ref)
@@ -87,15 +90,8 @@ def run_episode(
     seed: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run one episode and return (per-agent rows, episode row)."""
-    config = replace(sim_config, n_agents=len(lineup))
-    sim_rng, agents_rng = np.random.default_rng(seed).spawn(2)
-    agent_rngs = agents_rng.spawn(len(lineup))
-    agents = [
-        make_agent(kind, i, rng, **agent_params[kind])
-        for i, (kind, rng) in enumerate(zip(lineup, agent_rngs, strict=True))
-    ]
-    sim = Simulator(config, sim_rng)
-    sim.reset()
+    sim, agents = seeded_episode(sim_config, lineup, agent_params, seed)
+    config = sim.config
     recorder = EpisodeRecorder(config.n_agents, config.gas_limit)
     for _ in range(horizon):
         bids = [b for agent in agents for b in agent.act(sim.observe(agent.index))]

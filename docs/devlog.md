@@ -56,3 +56,29 @@
   scenario: every capture adds one 2-gas tx no matter who wins, so the baselines' strategy
   can't move organic delay. Latency only becomes strategy-dependent once agents can send
   multiple txs (PGA rounds, failed txs) or bid amounts change crowd-out more.
+
+## 2026-10-28: M3 gymnasium env + PPO
+
+**What changed**
+- `envs/single_agent.py`: `SingleAgentMEVEnv` (learner in slot 0, baseline opponents in the
+  rest). Observation: 6 + top_k normalized features clipped to [0, 10]: balance gain, best
+  visible value, top-k fees, pending gas, clearing price, last block's mean winning
+  payment/value, step fraction. Action: one bid fraction applied to every visible opportunity.
+- `episode.py`: `seeded_episode()` shared by the runner and the env, so a seed builds the
+  same episode in both. A test checks that a constant-fraction learner reproduces a greedy
+  agent in the runner exactly.
+- `training/train_ppo.py` + `configs/ppo_single.yaml`: SB3 PPO, then PPO and each baseline
+  are evaluated in the learner slot on the same held-out seeds (0..19; training seeds are
+  drawn from >= 2**20 so they never overlap).
+- `gymnasium` and `stable-baselines3` as an optional `[rl]` extra, so `core/` installs and
+  tests without them (env/training tests skip if missing).
+
+**Surprising**
+- 10k-step sanity run (not the real result): PPO already bids ~14% of value and matches
+  Random's profit while winning only 6% of the opportunities it bids on. Against
+  random + rule-based opponents, cheap bids on uncontested opportunities are almost as
+  good as fighting for contested ones.
+- With these opponents rule-based (0.36) beats greedy (0.33) in the learner slot, the
+  reverse of the M2 mixed lineup, because the learner no longer faces a greedy opponent.
+
+**Result:** pending the full 300k-step run.

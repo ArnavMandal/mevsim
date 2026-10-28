@@ -50,3 +50,16 @@ Writes `results/baselines/<timestamp>/`: the resolved `config.yaml`, `agents.csv
 and `profit.png`, `latency.png`, `bid_shading.png`. Scenarios (a mixed lineup plus one
 homogeneous lineup per agent type) are defined in the YAML and share seeds, so they see the
 same organic and opportunity arrivals.
+
+## M3: single-agent gymnasium env + PPO
+
+```bash
+pip install -e ".[dev,rl]"     # adds gymnasium + stable-baselines3 (pulls in PyTorch)
+python -m mevsim.training.train_ppo --config configs/ppo_single.yaml   # ~3 min on a laptop CPU
+```
+
+`mevsim.envs.SingleAgentMEVEnv`: agent 0 learns a bid fraction in [0, 1] against fixed
+baseline opponents (`opponents` in the config). After training, PPO and each baseline take
+the learner slot on the same 20 held-out seeds. Writes `results/ppo_single/<timestamp>/`:
+`model.zip`, SB3 `progress.csv`, `eval_agents.csv`, `eval_episodes.csv`, plots, and
+`summary.txt` (learner-slot profit per policy, mean ± 95% CI).

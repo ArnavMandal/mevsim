@@ -1,0 +1,34 @@
+# M3: PPO in the learner slot vs fixed baseline opponents (SPEC sections 4 and 7).
+name: ppo_single
+sim_config: configs/default.yaml
+sim_overrides: {}      # n_agents is set to 1 + len(opponents)
+horizon: 200           # blocks per episode
+
+opponents: [random, rule_based]
+baselines: [random, greedy, rule_based]   # also evaluated in the learner slot for comparison
+
+agents:
+  random: {}
+  greedy:
+    fraction: 0.9
+  rule_based:
+    margin: 0.1
+    step_up: 0.05
+    smoothing: 0.2
+    initial_ratio: 0.5
+
+train:
+  total_timesteps: 300000
+  seed: 0
+  n_envs: 4
+  ppo:                 # passed straight to stable_baselines3.PPO
+    learning_rate: 0.0003
+    n_steps: 1024      # per env
+    batch_size: 256
+    n_epochs: 10
+    gamma: 0.99
+    gae_lambda: 0.95
+    ent_coef: 0.0
+
+eval:
+  seeds: 20            # int -> seeds 0..n-1 (training episodes use seeds >= 2**20)

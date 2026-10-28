@@ -1,0 +1,35 @@
+# M4: N learners sharing one PPO policy (parameter sharing, independent rewards).
+name: ppo_multi
+sim_config: configs/default.yaml
+sim_overrides: {}      # n_agents is set to N + len(opponents)
+horizon: 200           # blocks per episode
+
+n_learners: [2, 3, 4, 5]
+opponents: []          # optional fixed baseline agents alongside the learners
+baselines: [random, greedy, rule_based]   # homogeneous size-N populations for comparison
+
+agents:
+  random: {}
+  greedy:
+    fraction: 0.9
+  rule_based:
+    margin: 0.1
+    step_up: 0.05
+    smoothing: 0.2
+    initial_ratio: 0.5
+
+train:
+  total_timesteps: 600000   # agent-steps (samples), the same budget for every N
+  seed: 0
+  n_envs: 2                 # parallel env copies; SB3 sees n_envs * N slots
+  ppo:                      # passed straight to stable_baselines3.PPO
+    learning_rate: 0.0003
+    n_steps: 512            # per slot, so the rollout is 512 * n_envs * N samples
+    batch_size: 256
+    n_epochs: 10
+    gamma: 0.99
+    gae_lambda: 0.95
+    ent_coef: 0.0
+
+eval:
+  seeds: 100           # int -> seeds 0..n-1 (training episodes use seeds >= 2**20)

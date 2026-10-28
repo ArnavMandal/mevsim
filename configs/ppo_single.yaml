@@ -31,4 +31,4 @@ train:
     ent_coef: 0.0
 
 eval:
-  seeds: 20            # int -> seeds 0..n-1 (training episodes use seeds >= 2**20)
+  seeds: 100           # int -> seeds 0..n-1 (training episodes use seeds >= 2**20)

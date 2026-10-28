@@ -103,3 +103,31 @@
   Still a near-constant bid (~0.50 of value). Better features (e.g. how many opportunities
   are visible, whether others likely saw one) or per-opportunity actions are the likely
   levers, plus more eval seeds to tighten the CIs.
+
+## 2026-10-28: M4 multi-agent env + shared-policy PPO
+
+**What changed**
+- `envs/multi_agent.py`: `MultiAgentMEVEnv`, a PettingZoo parallel env. Learners fill slots
+  0..N-1 with the M3 observation/action/reward, and optional baseline opponents fill the
+  rest. Passes `parallel_api_test`; a fixed-fraction population reproduces the runner exactly.
+- `envs/vec.py`: `SharedPolicyVecEnv`, a small SB3 VecEnv adapter (each learner of each env
+  copy is one slot) used instead of supersuit, which has a history of version breakage
+  with SB3 2.x / gymnasium 1.x.
+- `metrics`: episodes now report `mev_captured_per_block` = `agent_profit_per_block` +
+  `mev_to_builder_per_block` (welfare split; tested for conservation).
+- `training/train_ppo_multi.py` + `configs/ppo_multi.yaml`: N = 2..5 sweep, same 600k
+  agent-step budget per N, `ShadingLogger` callback -> `n<N>/shading.csv`, held-out
+  evaluation vs homogeneous baseline populations.
+- `pettingzoo` added to the `[rl]` extra. M3 evaluation raised to 100 seeds.
+
+**Surprising**
+- SB3's Gaussian policy starts with mean 0 and actions are clipped to [0, 1], so an
+  untrained population bids ~0 about half the time. A shared-policy population therefore
+  *starts* in a near-collusive state (everyone bids nothing and splits the MEV), and the
+  question becomes whether competition erodes it. In a 20k-step smoke run PPO populations
+  still bid 2-34% of value and earned 3-10x the greedy populations. That reflects the
+  starting point, not learned collusion; `shading_training.png` shows which way it goes.
+- Floating-point detail: a float32 action of 0.7 is 0.69999999, so the env and a 0.7 greedy
+  agent disagree in the 8th digit. Equivalence tests use 0.75 (exact in float32).
+
+**Result:** pending the full sweep.

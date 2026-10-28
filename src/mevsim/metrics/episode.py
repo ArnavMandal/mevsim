@@ -41,6 +41,8 @@ class EpisodeRecorder:
         self.latencies: list[int] = []
         self.backlog: list[float] = []
         self.gas_used: list[int] = []
+        self.mev_captured = 0.0
+        self.mev_to_builder = 0.0
 
     def record(
         self,
@@ -61,6 +63,8 @@ class EpisodeRecorder:
         for tx in result.block.txs:
             if tx.kind is TxKind.AGENT:
                 self.captures[tx.owner] += 1
+                self.mev_captured += opportunities[tx.opportunity_id].value
+                self.mev_to_builder += tx.total_fee
             else:
                 self.latencies.append(result.block.step - tx.arrival_step)
         self.backlog.append(pending_gas / self.gas_limit)
@@ -87,8 +91,13 @@ class EpisodeRecorder:
 
     def episode_summary(self) -> dict[str, Any]:
         lat = np.asarray(self.latencies, dtype=float)
+        blocks = max(self.steps, 1)
         return {
             "blocks": self.steps,
+            # Welfare split: captured MEV = agents' total profit + what agents paid the builder.
+            "mev_captured_per_block": self.mev_captured / blocks,
+            "mev_to_builder_per_block": self.mev_to_builder / blocks,
+            "agent_profit_per_block": sum(self.profit) / blocks,
             "organic_included": len(lat),
             "mean_latency": float(lat.mean()) if len(lat) else float("nan"),
             "p90_latency": float(np.percentile(lat, 90)) if len(lat) else float("nan"),

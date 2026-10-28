@@ -9,14 +9,14 @@ from mevsim.core.config import SimConfig  # noqa: E402
 from mevsim.envs import SingleAgentMEVEnv  # noqa: E402
 from mevsim.experiments.run import run_episode  # noqa: E402
 
-PARAMS = {"greedy": {"fraction": 0.7}}
+PARAMS = {"greedy": {"fraction": 0.75}}
 
 
 def make_env(horizon=40):
     return SingleAgentMEVEnv(SimConfig(), ["random", "rule_based"], PARAMS, horizon=horizon)
 
 
-def rollout(env, seed, fraction=0.7):
+def rollout(env, seed, fraction=0.75):
     obs, _ = env.reset(seed=seed)
     trace, done = [obs], False
     while not done:
@@ -52,7 +52,7 @@ def test_observations_in_space_and_episode_length():
 
 def test_matches_runner_with_fixed_fraction_agent():
     """A constant-fraction learner must reproduce a greedy agent in the runner exactly."""
-    _, info = rollout(make_env(horizon=60), seed=9, fraction=0.7)
+    _, info = rollout(make_env(horizon=60), seed=9, fraction=0.75)
     rows, ep = run_episode(SimConfig(), ["greedy", "random", "rule_based"], PARAMS, 60, seed=9)
     for env_row, run_row in zip(info["agent_metrics"], rows, strict=True):
         assert env_row["profit"] == pytest.approx(run_row["profit"])

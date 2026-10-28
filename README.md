@@ -60,6 +60,22 @@ python -m mevsim.training.train_ppo --config configs/ppo_single.yaml   # ~10 min
 
 `mevsim.envs.SingleAgentMEVEnv`: agent 0 learns a bid fraction in [0, 1] against fixed
 baseline opponents (`opponents` in the config). After training, PPO and each baseline take
-the learner slot on the same 20 held-out seeds. Writes `results/ppo_single/<timestamp>/`:
+the learner slot on the same 100 held-out seeds. Writes `results/ppo_single/<timestamp>/`:
 `model.zip`, SB3 `progress.csv`, `eval_agents.csv`, `eval_episodes.csv`, plots, and
 `summary.txt` (learner-slot profit per policy, mean ± 95% CI).
+
+## M4: multi-agent PettingZoo env + shared-policy PPO
+
+```bash
+python -m mevsim.training.train_ppo_multi --config configs/ppo_multi.yaml   # ~10 min
+```
+
+`mevsim.envs.MultiAgentMEVEnv` is a PettingZoo parallel env with N learners (same
+observation, action and reward as M3) plus optional fixed opponents. Social welfare is
+tracked, not rewarded: captured MEV split into agent profit and builder revenue.
+`SharedPolicyVecEnv` exposes every learner as a slot of one SB3 VecEnv, so a single PPO
+policy is trained with parameter sharing and independent rewards. For each N in the sweep
+(2-5) the run writes `n<N>/shading.csv` (bid shading, win rate, profit per learner per
+training episode), then evaluates the learned population on 100 held-out seeds next to
+all-random / all-greedy / all-rule-based populations of the same size: `summary.txt`,
+`profit_vs_n.png`, `builder_share_vs_n.png`, `shading_training.png`.

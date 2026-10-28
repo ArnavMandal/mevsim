@@ -81,4 +81,14 @@
 - With these opponents rule-based (0.36) beats greedy (0.33) in the learner slot, the
   reverse of the M2 mixed lineup, because the learner no longer faces a greedy opponent.
 
-**Result:** pending the full 300k-step run.
+**Result (300k steps, 20 held-out seeds, learner-slot profit per block ± 95% CI)**
+- PPO 0.346 ± 0.047, Random 0.294 ± 0.037, Greedy 0.333 ± 0.025, Rule-based 0.359 ± 0.023.
+- Paired by seed (same arrivals for every policy): PPO beats Random by +0.052 ± 0.042
+  (15/20 seeds), and is tied with Greedy (+0.012 ± 0.042, 12/20) and Rule-based
+  (-0.014 ± 0.049, 9/20). The milestone's mean criterion passes, but only the win over
+  Random is statistically clear.
+- PPO settled on a near-constant bid of ~0.47 of value (shading 0.465 ± 0.002 across seeds):
+  it wins few opportunities (12%) but keeps over half of each one. It has not yet learned
+  to vary bids with the observation.
+- Undertrained: training episode reward was still climbing steeply at the end
+  (23 -> 41 -> 57 per 200-block episode at 4k / 188k / 303k steps). Next: a longer run.

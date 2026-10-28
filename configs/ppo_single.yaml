@@ -18,7 +18,7 @@ agents:
     initial_ratio: 0.5
 
 train:
-  total_timesteps: 300000
+  total_timesteps: 1000000
   seed: 0
   n_envs: 4
   ppo:                 # passed straight to stable_baselines3.PPO

@@ -55,7 +55,7 @@ same organic and opportunity arrivals.
 
 ```bash
 pip install -e ".[dev,rl]"     # adds gymnasium + stable-baselines3 (pulls in PyTorch)
-python -m mevsim.training.train_ppo --config configs/ppo_single.yaml   # ~3 min on a laptop CPU
+python -m mevsim.training.train_ppo --config configs/ppo_single.yaml   # ~10 min on a laptop CPU
 ```
 
 `mevsim.envs.SingleAgentMEVEnv`: agent 0 learns a bid fraction in [0, 1] against fixed

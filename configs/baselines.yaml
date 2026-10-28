@@ -1,0 +1,22 @@
+# M2: compare the three baseline agents (SPEC sections 5 and 7).
+name: baselines
+sim_config: configs/default.yaml
+sim_overrides: {}      # any SimConfig key; n_agents is set from each lineup
+horizon: 200           # blocks per episode
+seeds: 10              # int -> seeds 0..n-1, or an explicit list
+
+agents:
+  random: {}
+  greedy:
+    fraction: 0.9
+  rule_based:
+    margin: 0.1        # never bid above (1 - margin) of value
+    step_up: 0.05      # bid this far above the estimated winning ratio
+    smoothing: 0.2     # EMA weight on each observed winning payment / value
+    initial_ratio: 0.5
+
+scenarios:
+  mixed: [random, greedy, rule_based]
+  all_random: [random, random, random]
+  all_greedy: [greedy, greedy, greedy]
+  all_rule_based: [rule_based, rule_based, rule_based]

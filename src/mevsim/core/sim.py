@@ -45,6 +45,7 @@ class Simulator:
         self.balances = [c.initial_balance] * c.n_agents
         self.congestion = 0.0
         self.last_clearing_price = 0.0
+        self.last_block_captures: list[tuple[float, float]] = []
         self._ready = True
         self._arrive()
 
@@ -75,6 +76,7 @@ class Simulator:
             pending_gas=max(float(pending), 0.0),
             gas_limit=c.gas_limit,
             last_clearing_price=self.last_clearing_price,
+            last_block_captures=list(self.last_block_captures),
         )
 
     def step(self, bids: list[Bid]) -> StepResult:
@@ -111,11 +113,13 @@ class Simulator:
 
         rewards = [0.0] * c.n_agents
         captured = []
+        block_captures = []
         for tx in block.txs:
             if tx.kind is TxKind.AGENT:
                 opp = active[tx.opportunity_id]
                 rewards[tx.owner] += opp.value - tx.total_fee
                 captured.append(opp)
+                block_captures.append((opp.value, tx.total_fee))
         for i, r in enumerate(rewards):
             self.balances[i] += r
 
@@ -127,6 +131,7 @@ class Simulator:
         a = c.congestion_smoothing
         self.congestion = a * backlog + (1.0 - a) * self.congestion
         self.last_clearing_price = block.clearing_price
+        self.last_block_captures = block_captures
 
         self.step_index += 1
         self._arrive()

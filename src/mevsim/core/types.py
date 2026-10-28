@@ -98,6 +98,9 @@ class Observation:
     pending_gas: float  # noisy total pending organic gas
     gas_limit: int
     last_clearing_price: float
+    # (opportunity value, payment) for each MEV capture in the previous block. Public:
+    # on a real chain, included txs and the profit they extracted are visible after the fact.
+    last_block_captures: list[tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass

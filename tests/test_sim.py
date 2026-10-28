@@ -150,3 +150,20 @@ def test_default_yaml_matches_dataclass_defaults():
     path = Path(__file__).parents[1] / "configs" / "default.yaml"
     loaded = SimConfig.from_yaml(path)
     assert loaded == SimConfig()
+
+
+def test_observation_reports_last_block_captures():
+    sim = Simulator(SimConfig(), np.random.default_rng(3))
+    sim.reset()
+    assert sim.observe(0).last_block_captures == []
+    seen = 0
+    for _ in range(100):
+        result = sim.step(greedy_bids(sim))
+        expected = sorted(
+            (tx.opportunity_id, tx.total_fee) for tx in result.block.txs if tx.kind is TxKind.AGENT
+        )
+        values = {o.id: o.value for o in result.captured}
+        caps = sorted(sim.observe(0).last_block_captures)
+        assert caps == sorted((values[oid], fee) for oid, fee in expected)
+        seen += len(caps)
+    assert seen > 0

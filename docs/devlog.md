@@ -92,3 +92,14 @@
   to vary bids with the observation.
 - Undertrained: training episode reward was still climbing steeply at the end
   (23 -> 41 -> 57 per 200-block episode at 4k / 188k / 303k steps). Next: a longer run.
+
+**Result (1M steps, same 20 held-out seeds)**
+- PPO 0.365 ± 0.053, now the highest mean (Rule-based 0.359, Greedy 0.333, Random 0.294).
+- Paired by seed: vs Random +0.072 ± 0.046 (16/20 seeds), vs Greedy +0.032 ± 0.038 (13/20),
+  vs Rule-based +0.006 ± 0.052 (9/20). Clearly better than Random; ahead of Greedy but the
+  CI still just crosses zero; tied with Rule-based.
+- Training plateaued around 500-600k steps (episode reward ~66-69 from there on), and the
+  policy's action std fell from 0.97 to 0.08, so more steps alone won't help much.
+  Still a near-constant bid (~0.50 of value). Better features (e.g. how many opportunities
+  are visible, whether others likely saw one) or per-opportunity actions are the likely
+  levers, plus more eval seeds to tighten the CIs.

@@ -55,8 +55,9 @@ def test_organic_stream_independent_of_agent_behavior():
     assert all_organic(sim_a, res_a) == all_organic(sim_b, res_b)
 
 
-def test_capacity_and_value_conservation():
-    sim, results = run(1, steps=300)
+@pytest.mark.parametrize("mechanism", ["sealed_first_price", "sealed_second_price"])
+def test_capacity_and_value_conservation(mechanism):
+    sim, results = run(1, steps=300, config=SimConfig(mechanism=mechanism))
     total_captured = total_profit = total_mev_payment = 0.0
     seen_opps: set[int] = set()
     for r in results:
@@ -84,6 +85,46 @@ def test_first_price_reward_is_value_minus_bid():
     assert r.rewards[0] == 0.0
     assert r.rewards[1] == pytest.approx(opp.value - 2.5)
     assert opp.id not in sim.opportunities.active
+
+
+def test_second_price_reward_is_value_minus_second_bid():
+    cfg = SimConfig(
+        n_agents=3,
+        p_see=1.0,
+        organic_rate=0.0,
+        opportunity_rate=3.0,
+        mechanism="sealed_second_price",
+    )
+    sim = Simulator(cfg, np.random.default_rng(0))
+    sim.reset()
+    opp = min(sim.opportunities.active.values(), key=lambda o: o.id)
+    r = sim.step([Bid(0, opp.id, 1.0), Bid(1, opp.id, 2.5), Bid(2, opp.id, 0.5)])
+    assert r.rewards == [0.0, pytest.approx(opp.value - 1.0), 0.0]
+    (tx,) = [t for t in r.block.txs if t.kind is TxKind.AGENT]
+    assert tx.total_fee == pytest.approx(1.0)
+
+
+def test_second_price_sole_winner_ordered_by_bid_under_congestion():
+    # Paying 0 must not push the winner out of a full block: ordering uses the bid.
+    cfg = SimConfig(
+        n_agents=1,
+        p_see=1.0,
+        gas_limit=4,
+        agent_tx_gas=2,
+        organic_rate=50.0,
+        organic_gas_min=2,
+        organic_gas_max=2,
+        organic_fee_scale=100.0,
+        opportunity_rate=3.0,
+        mechanism="sealed_second_price",
+    )
+    sim = Simulator(cfg, np.random.default_rng(0))
+    sim.reset()
+    assert sim.mempool.pending_gas > cfg.gas_limit
+    opp = min(sim.opportunities.active.values(), key=lambda o: o.id)
+    r = sim.step([Bid(0, opp.id, 1e6)])
+    assert r.captured == [opp]
+    assert r.rewards == [pytest.approx(opp.value)]
 
 
 def test_winner_crowded_out_pays_nothing_and_opportunity_survives():

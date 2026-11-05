@@ -26,10 +26,20 @@ class Transaction:
     arrival_step: int
     kind: TxKind
     opportunity_id: int | None = None
+    # Fee per gas the builder orders by, if different from what is paid. Set for MEV txs
+    # under second-price auctions: ordered by the winning bid, charged the second price.
+    priority_fee_per_gas: float | None = None
 
     @property
     def total_fee(self) -> float:
         return self.gas_used * self.max_fee_per_gas
+
+    @property
+    def ordering_fee(self) -> float:
+        """Fee per gas used by the builder to order txs."""
+        if self.priority_fee_per_gas is None:
+            return self.max_fee_per_gas
+        return self.priority_fee_per_gas
 
 
 @dataclass
@@ -56,12 +66,16 @@ class Bid:
 
 @dataclass(frozen=True)
 class AuctionResult:
-    """Outcome of the auction for one opportunity."""
+    """Outcome of the auction for one opportunity.
+
+    `bid` is the winner's bid (used for block ordering); `payment` is what it is charged.
+    """
 
     opportunity_id: int
     winner: int
     payment: float
     n_bidders: int
+    bid: float
 
 
 @dataclass

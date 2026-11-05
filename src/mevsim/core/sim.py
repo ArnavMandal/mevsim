@@ -103,6 +103,7 @@ class Simulator:
                 owner=r.winner,
                 gas_used=c.agent_tx_gas,
                 max_fee_per_gas=r.payment / c.agent_tx_gas,
+                priority_fee_per_gas=r.bid / c.agent_tx_gas,
                 arrival_step=step,
                 kind=TxKind.AGENT,
                 opportunity_id=r.opportunity_id,

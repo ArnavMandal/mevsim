@@ -27,6 +27,14 @@ def _group_valid_bids(bids: list[Bid]) -> dict[int, dict[int, float]]:
     return grouped
 
 
+def _pick_winner(per_agent: dict[int, float], rng: np.random.Generator) -> tuple[int, float]:
+    """Return (winner, top bid); ties broken uniformly at random, independent of bid order."""
+    top = max(per_agent.values())
+    tied = sorted(a for a, amt in per_agent.items() if amt == top)
+    winner = tied[int(rng.integers(len(tied)))] if len(tied) > 1 else tied[0]
+    return winner, top
+
+
 class SealedFirstPrice:
     """One sealed round per opportunity; highest bid wins and pays its own bid.
 
@@ -38,14 +46,34 @@ class SealedFirstPrice:
         grouped = _group_valid_bids(bids)
         for opp_id in sorted(grouped):
             per_agent = grouped[opp_id]
-            top = max(per_agent.values())
-            tied = sorted(a for a, amt in per_agent.items() if amt == top)
-            winner = tied[int(rng.integers(len(tied)))] if len(tied) > 1 else tied[0]
-            results.append(AuctionResult(opp_id, winner, top, len(per_agent)))
+            winner, top = _pick_winner(per_agent, rng)
+            results.append(AuctionResult(opp_id, winner, top, len(per_agent), top))
         return results
 
 
-MECHANISMS: dict[str, type] = {"sealed_first_price": SealedFirstPrice}
+class SealedSecondPrice:
+    """One sealed round per opportunity; highest bid wins and pays the second-highest bid.
+
+    A sole bidder pays 0 (no reserve price). On a tie the winner (chosen at random) pays
+    the tied amount, since the second-highest bid equals its own.
+    """
+
+    def resolve(self, bids: list[Bid], rng: np.random.Generator) -> list[AuctionResult]:
+        results = []
+        grouped = _group_valid_bids(bids)
+        for opp_id in sorted(grouped):
+            per_agent = grouped[opp_id]
+            winner, top = _pick_winner(per_agent, rng)
+            others = [amt for a, amt in per_agent.items() if a != winner]
+            payment = max(others, default=0.0)
+            results.append(AuctionResult(opp_id, winner, payment, len(per_agent), top))
+        return results
+
+
+MECHANISMS: dict[str, type] = {
+    "sealed_first_price": SealedFirstPrice,
+    "sealed_second_price": SealedSecondPrice,
+}
 
 
 def make_auction(name: str) -> Auction:

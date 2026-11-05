@@ -39,3 +39,10 @@ def test_fee_ties_broken_by_arrival_then_id():
 def test_empty_block():
     block = build_block([], gas_limit=10, step=0)
     assert block.txs == [] and block.clearing_price == 0.0 and block.builder_revenue == 0.0
+
+
+def test_orders_by_priority_fee_when_set():
+    cheap_but_urgent = Transaction(9, 0, 4, 0.0, 0, TxKind.AGENT, priority_fee_per_gas=5.0)
+    block = build_block([tx(0, 4, 3.0), tx(1, 4, 2.0), cheap_but_urgent], gas_limit=8, step=0)
+    assert [t.id for t in block.txs] == [9, 0]
+    assert block.builder_revenue == 4 * 3.0  # the agent tx pays its max_fee (0), not priority

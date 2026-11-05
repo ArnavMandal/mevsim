@@ -52,6 +52,8 @@ class Simulator:
         self.congestion = 0.0
         self.last_clearing_price = 0.0
         self.last_block_captures: list[tuple[float, float]] = []
+        self.last_block_bids: list[tuple[float, float]] = []
+        self._seen_ids: set[int] = set()
         self._new_block()
         self._ready = True
         self._arrive()
@@ -60,6 +62,7 @@ class Simulator:
         self.round = 0
         self._round_bids: list[Bid] = []
         self._obs_cache: dict[int, Observation] = {}
+        self._newly_seen: list = []
 
     def _arrive(self) -> None:
         self.mempool.arrive(self.step_index, self.congestion)
@@ -90,6 +93,10 @@ class Simulator:
         rng = self._obs_rng
         opps = sorted(self.opportunities.active.values(), key=lambda o: o.id)
         visible = [o for o in opps if rng.random() < c.p_see]
+        for o in visible:
+            if o.id not in self._seen_ids:
+                self._seen_ids.add(o.id)
+                self._newly_seen.append(o)
 
         fees = sorted((tx.max_fee_per_gas for tx in self.mempool.pending), reverse=True)
         top = np.zeros(c.top_k)
@@ -108,6 +115,7 @@ class Simulator:
             gas_limit=c.gas_limit,
             last_clearing_price=self.last_clearing_price,
             last_block_captures=list(self.last_block_captures),
+            last_block_bids=list(self.last_block_bids),
             n_rounds=c.n_rounds,
         )
 
@@ -166,13 +174,14 @@ class Simulator:
 
         rewards = [0.0] * c.n_agents
         captured = []
-        block_captures = []
+        block_captures, block_bids = [], []
         for tx in block.txs:
             if tx.kind is TxKind.AGENT:
                 opp = active[tx.opportunity_id]
                 rewards[tx.owner] += opp.value - tx.total_fee
                 captured.append(opp)
                 block_captures.append((opp.value, tx.total_fee))
+                block_bids.append((opp.value, tx.ordering_fee * tx.gas_used))
         for i, r in enumerate(rewards):
             self.balances[i] += r
 
@@ -185,9 +194,10 @@ class Simulator:
         self.congestion = a * backlog + (1.0 - a) * self.congestion
         self.last_clearing_price = block.clearing_price
         self.last_block_captures = block_captures
+        self.last_block_bids = block_bids
 
-        all_bids = self._round_bids + final
+        all_bids, newly_seen = self._round_bids + final, self._newly_seen
         self.step_index += 1
         self._new_block()
         self._arrive()
-        return StepResult(block, results, captured, rewards, all_bids)
+        return StepResult(block, results, captured, rewards, all_bids, newly_seen)

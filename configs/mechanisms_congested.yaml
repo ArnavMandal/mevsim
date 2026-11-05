@@ -1,0 +1,55 @@
+# M5: mechanism comparison under congestion (otherwise identical to mechanisms.yaml).
+name: mechanisms_congested
+sim_config: configs/default.yaml
+sim_overrides:         # blocks ~99% full (default config: ~56%), so inclusion is contested
+  organic_rate: 12.0
+horizon: 200           # blocks per episode
+seeds: 20              # int -> seeds 0..n-1, or an explicit list
+
+mechanisms: [sealed_first_price, sealed_second_price, pga]
+pga_rounds_sweep: [2, 5, 10]   # extra PGA runs at these round counts; [] to skip
+
+# Welfare cost of one unit of organic gas waiting one extra block (organic fees are ~1 per
+# gas, so 0.1 means a block of delay costs a user ~10% of its fee).
+delay_cost: 0.1
+
+agents:
+  random: {}
+  greedy:
+    fraction: 0.9
+  rule_based:
+    margin: 0.1
+    step_up: 0.05
+    smoothing: 0.2
+    initial_ratio: 0.5
+  rule_based_bid:      # same rule, but tracks winning bids instead of payments
+    margin: 0.1
+    step_up: 0.05
+    smoothing: 0.2
+    initial_ratio: 0.5
+
+scenarios:
+  mixed: [random, greedy, rule_based]
+  all_random: [random, random, random]
+  all_greedy: [greedy, greedy, greedy]
+  all_rule_based: [rule_based, rule_based, rule_based]
+  all_rule_based_bid: [rule_based_bid, rule_based_bid, rule_based_bid]
+
+# Optional: train a shared-policy PPO population under each mechanism (M4 trainer) and add
+# it as scenario "ppo". Needs the [rl] extra; ~10 min per mechanism (PGA takes longer per
+# block, since each round is an env step).
+ppo:
+  enabled: false
+  n_learners: 3
+  train:
+    total_timesteps: 600000
+    seed: 0
+    n_envs: 2
+    ppo:
+      learning_rate: 0.0003
+      n_steps: 512
+      batch_size: 256
+      n_epochs: 10
+      gamma: 0.99
+      gae_lambda: 0.95
+      ent_coef: 0.0

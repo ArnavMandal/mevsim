@@ -183,3 +183,44 @@
   low under second price, so it spirals its bids down to ~0.48 of value. That is a property of
   the bot, not the mechanism, and worth keeping in mind when reading M5 baselines.
 - Random agents under PGA effectively bid the max of R uniform draws (shading 0.83 at R=5).
+
+## 2026-11-04: M5 mechanism comparison
+
+**What changed**
+- `experiments/mechanisms.py` + `configs/mechanisms.yaml` / `mechanisms_congested.yaml`:
+  every population x mechanism on 20 seeds, a PGA rounds sweep, `summary.md` + plots, and
+  optional PPO training per mechanism (M4 trainer).
+- Efficiency = captured MEV / MEV some agent saw (`StepResult.newly_seen`, recorder
+  `mev_seen_per_block`). Valuations are common, so "who valued it most" reduces to "did anyone
+  who saw it get it".
+- Welfare loss vs a no-MEV counterfactual (same seed, no bids; the organic stream is
+  independent of agents): `delay_cost x` extra pending organic gas per block + MEV to builder.
+- `rule_based_bid`: the rule-based agent tracking winning *bids* (new public
+  `Observation.last_block_bids`) instead of payments.
+
+**Results** (3 agents, 20 seeds; `results/mechanisms*/20261104-*`)
+- Default config, builder share of MEV (all_random / mixed / all_rule_based_bid):
+  first-price 0.68 / 0.89 / 0.86, second-price 0.38 / 0.53 / 0.77, PGA 0.91 / 0.91 / 0.90.
+  Second price leaves agents the most; PGA the least. More PGA rounds push the builder share
+  up (all_random 0.85 -> 0.92 -> 0.96 at R = 2/5/10, congested config).
+- With the default config, efficiency is 1.000 and extra organic waiting is identical across
+  mechanisms. Blocks are only ~56% full, so every winning MEV tx is included and the welfare
+  differences are pure transfers to the builder.
+- Congested config (`organic_rate: 12`, blocks ~99% full): efficiency ~0.81-0.87, and MEV txs
+  push organic users back (~100 extra gas-blocks of waiting per block, vs ~0.1 by default).
+  First- and second-price have identical efficiency and delay for the same population,
+  because both order by bid. PGA is slightly *more* efficient for random bidders (0.87 vs 0.81)
+  because escalation lifts low bids above organic fees.
+
+**Surprising**
+- Efficiency was exactly 1.000 everywhere on the first run. Not a bug: the default config is
+  uncongested. Efficiency only bites when inclusion is contested, hence the congested config.
+- Plain rule-based under second price "wins" on welfare loss (9.1 vs ~15.5 under congestion)
+  only because its payment-tracking spiral bids so low that it loses block space and leaves
+  MEV uncaptured (efficiency 0.64). The SPEC welfare formula doesn't count that, so
+  `uncaptured_mev_per_block` is reported next to it. `rule_based_bid` fixes the spiral (0.77
+  builder share, efficiency 0.86).
+- The SPEC counts builder payments as welfare loss, but they are transfers, not deadweight
+  loss. Only the delay term and uncaptured MEV are true efficiency losses here. Worth
+  revisiting the definition in M7.
+- PPO under each mechanism is wired up (`ppo.enabled`) but not yet run.

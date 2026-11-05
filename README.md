@@ -79,3 +79,27 @@ policy is trained with parameter sharing and independent rewards. For each N in 
 training episode), then evaluates the learned population on 100 held-out seeds next to
 all-random / all-greedy / all-rule-based populations of the same size: `summary.txt`,
 `profit_vs_n.png`, `builder_share_vs_n.png`, `shading_training.png`.
+
+## M5: auction mechanism comparison
+
+```bash
+python -m mevsim.experiments.mechanisms --config configs/mechanisms.yaml            # ~25 s
+python -m mevsim.experiments.mechanisms --config configs/mechanisms_congested.yaml  # blocks ~99% full
+```
+
+Three mechanisms (`mechanism` in the sim config): `sealed_first_price`, `sealed_second_price`
+(the winner pays the runner-up's bid; MEV txs are ordered in the block by the winning bid), and
+`pga` (first-price over `pga_rounds` binding rounds, with the top bid public between rounds;
+ties go to the earliest bid). Every baseline population runs under every mechanism on the same
+20 seeds, plus a PGA sweep over 2/5/10 rounds. Metrics per episode:
+
+- **Builder share**: fraction of captured MEV paid to the builder.
+- **Efficiency**: captured MEV / value of opportunities some agent saw.
+- **Welfare loss** (SPEC §6): `delay_cost` × organic gas-blocks of extra waiting vs a no-MEV
+  counterfactual (same seed, nobody bids) + MEV paid to the builder. Uncaptured MEV is
+  reported separately.
+
+Writes `results/<name>/<timestamp>/`: `config.yaml`, `agents.csv`, `episodes.csv`, a
+`summary.md` table (mean ± 95% CI), `mechanisms.png` and `pga_rounds.png`. Set
+`ppo.enabled: true` to also train a shared-policy PPO population under each mechanism
+(scenario `ppo`, ~10 min per mechanism).

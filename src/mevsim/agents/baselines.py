@@ -89,12 +89,15 @@ class RuleBasedAgent(Agent):
     def reset(self) -> None:
         self.ratio = self.initial_ratio
 
+    track_bids = False  # learn from winning payments (False) or winning bids (True)
+
     def act(self, obs: Observation) -> list[Bid]:
         if obs.round == 0:  # once per block, not once per PGA round
-            for value, payment in obs.last_block_captures:
+            observed = obs.last_block_bids if self.track_bids else obs.last_block_captures
+            for value, price in observed:
                 if value > 0:
                     a = self.smoothing
-                    self.ratio = a * (payment / value) + (1.0 - a) * self.ratio
+                    self.ratio = a * (price / value) + (1.0 - a) * self.ratio
         base = self.bid_fraction(obs)
         bids = []
         for o in obs.visible_opportunities:
@@ -109,8 +112,20 @@ class RuleBasedAgent(Agent):
         return float(np.clip(self.ratio + self.step_up, 0.0, 1.0 - self.margin))
 
 
+class RuleBasedBidAgent(RuleBasedAgent):
+    """Rule-based agent that tracks winning *bids* instead of payments.
+
+    Identical under first-price and PGA (bid == payment). Under second price the payment
+    is the runner-up's bid, so tracking payments makes the plain rule-based agent ratchet
+    its bids down; tracking the winning bid avoids that.
+    """
+
+    name = "rule_based_bid"
+    track_bids = True
+
+
 AGENTS: dict[str, type[Agent]] = {
-    cls.name: cls for cls in (RandomAgent, GreedyAgent, RuleBasedAgent)
+    cls.name: cls for cls in (RandomAgent, GreedyAgent, RuleBasedAgent, RuleBasedBidAgent)
 }
 
 

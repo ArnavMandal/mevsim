@@ -119,6 +119,9 @@ class Observation:
     # (opportunity value, payment) for each MEV capture in the previous block. Public:
     # on a real chain, included txs and the profit they extracted are visible after the fact.
     last_block_captures: list[tuple[float, float]] = field(default_factory=list)
+    # (opportunity value, winning bid) for the same captures. Equal to the payment except
+    # under second price, where the auctioneer is assumed to publish the winning bid.
+    last_block_bids: list[tuple[float, float]] = field(default_factory=list)
     # PGA only: current bidding round, number of rounds, the public top bid on each visible
     # opportunity so far this block, and the visible opportunities this agent leads alone
     # (a tie for the top, which it would win only at random, does not count).
@@ -137,3 +140,5 @@ class StepResult:
     captured: list[Opportunity]
     rewards: list[float]  # per agent: captured value minus payment
     bids: list[Bid] = field(default_factory=list)  # every bid submitted this block, all rounds
+    # Opportunities that some agent saw for the first time while observing this block.
+    newly_seen: list[Opportunity] = field(default_factory=list)

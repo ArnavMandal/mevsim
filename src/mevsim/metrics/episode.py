@@ -1,6 +1,7 @@
 """Per-episode metrics from SPEC section 6 (profit, win rate, latency, congestion, shading).
 
-Auction efficiency and welfare loss need a counterfactual run and arrive with M5.
+Efficiency is captured MEV / value of opportunities some agent saw. Welfare loss needs a
+no-MEV counterfactual run and is computed in `mevsim.experiments.mechanisms`.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ class EpisodeRecorder:
         self.gas_used: list[int] = []
         self.mev_captured = 0.0
         self.mev_to_builder = 0.0
+        self.mev_seen = 0.0
 
     def record(
         self,
@@ -75,6 +77,7 @@ class EpisodeRecorder:
                 self.mev_to_builder += tx.total_fee
             else:
                 self.latencies.append(result.block.step - tx.arrival_step)
+        self.mev_seen += sum(o.value for o in result.newly_seen)
         self.backlog.append(pending_gas / self.gas_limit)
         self.gas_used.append(result.block.gas_used)
 
@@ -106,6 +109,10 @@ class EpisodeRecorder:
             "mev_captured_per_block": self.mev_captured / blocks,
             "mev_to_builder_per_block": self.mev_to_builder / blocks,
             "agent_profit_per_block": sum(self.profit) / blocks,
+            # Allocative efficiency: share of MEV some agent saw that was actually captured.
+            # (Every agent values an opportunity equally, so this is the "visible" version.)
+            "mev_seen_per_block": self.mev_seen / blocks,
+            "efficiency": self.mev_captured / self.mev_seen if self.mev_seen else float("nan"),
             "organic_included": len(lat),
             "mean_latency": float(lat.mean()) if len(lat) else float("nan"),
             "p90_latency": float(np.percentile(lat, 90)) if len(lat) else float("nan"),

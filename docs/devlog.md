@@ -130,4 +130,27 @@
 - Floating-point detail: a float32 action of 0.7 is 0.69999999, so the env and a 0.7 greedy
   agent disagree in the 8th digit. Equivalence tests use 0.75 (exact in float32).
 
-**Result:** pending the full sweep.
+**Result (2026-11-04, run `results/ppo_multi/20261104-192525`, 600k agent-steps per N, 100 held-out seeds)**
+
+| N | PPO profit/block | PPO shading | builder share | best baseline profit | greedy profit |
+|---|---|---|---|---|---|
+| 2 | 0.995 ± 0.019 | 0.683 | 0.700 | random 1.279 | 0.332 |
+| 3 | 0.193 ± 0.003 | 0.904 | 0.913 | random 0.681 | 0.221 |
+| 4 | 0.068 ± 0.001 | 0.956 | 0.959 | random 0.417 | 0.166 |
+| 5 | 0.071 ± 0.001 | 0.938 | 0.946 | random 0.273 | 0.133 |
+
+- Competition erodes the near-collusive start. Mean training shading rises from ~0.35-0.44
+  to 0.69 (N=2), 0.90 (N=3), 0.95 (N=4), 0.93 (N=5). For N >= 3 the learned population bids
+  *above* greedy's 0.9 and earns less than an all-greedy population. Almost all captured MEV
+  goes to the builder (91-96%), close to Bertrand-style full rent dissipation.
+- Every learner's best response is to outbid, so the shared policy keeps less for each agent
+  than even random bidding. All-random populations earn the most at every N because their
+  average bid is only 0.5. This is the welfare-cost-of-competition effect that M5 is meant to measure.
+- Profit falls steeply with N (SPEC experiment 2 answered qualitatively): 0.995 -> 0.193 -> 0.07.
+- **Caveat: N=2 had not converged.** Shading was flat at ~0.36-0.38 for 300k steps, then
+  climbed 0.44 -> 0.60 -> 0.70 over the last 300k. The N=2 numbers are a snapshot on the way
+  to (probably) higher shading. N=3 is near convergence; N=4 and 5 plateaued.
+  Same budget per N means fewer samples per learner slot at large N, but the opposite
+  happened here: larger N converged faster, plausibly because the competitive pressure is stronger.
+- Surprising: the climb is slow and late at N=2. With two bidders, undercutting is
+  rewarded often enough that the gradient toward outbidding is weak until the policy std shrinks.

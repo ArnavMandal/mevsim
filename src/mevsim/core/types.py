@@ -57,11 +57,15 @@ class Opportunity:
 
 @dataclass(frozen=True)
 class Bid:
-    """A sealed bid: agent offers to pay `amount` (total, not per gas) for an opportunity."""
+    """A bid: agent offers to pay `amount` (total, not per gas) for an opportunity.
+
+    `round` is the PGA bidding round it was placed in (always 0 for sealed auctions).
+    """
 
     agent: int
     opportunity_id: int
     amount: float
+    round: int = 0
 
 
 @dataclass(frozen=True)
@@ -115,6 +119,13 @@ class Observation:
     # (opportunity value, payment) for each MEV capture in the previous block. Public:
     # on a real chain, included txs and the profit they extracted are visible after the fact.
     last_block_captures: list[tuple[float, float]] = field(default_factory=list)
+    # PGA only: current bidding round, number of rounds, the public top bid on each visible
+    # opportunity so far this block, and the visible opportunities this agent leads alone
+    # (a tie for the top, which it would win only at random, does not count).
+    round: int = 0
+    n_rounds: int = 1
+    top_bids: dict[int, float] = field(default_factory=dict)
+    leading: set[int] = field(default_factory=set)
 
 
 @dataclass
@@ -125,3 +136,4 @@ class StepResult:
     auction_results: list[AuctionResult]
     captured: list[Opportunity]
     rewards: list[float]  # per agent: captured value minus payment
+    bids: list[Bid] = field(default_factory=list)  # every bid submitted this block, all rounds

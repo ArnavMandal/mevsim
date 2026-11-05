@@ -58,3 +58,33 @@ def test_matches_runner_with_fixed_fraction_agent():
         assert env_row["profit"] == pytest.approx(run_row["profit"])
         assert env_row["captures"] == run_row["captures"]
     assert info["episode_metrics"] == ep
+
+
+PGA = SimConfig(mechanism="pga", pga_rounds=3)
+
+
+def make_pga_env(horizon=20):
+    return SingleAgentMEVEnv(PGA, ["random", "rule_based"], PARAMS, horizon=horizon)
+
+
+def test_pga_check_env_and_episode_length():
+    check_env(make_pga_env(), skip_render_check=True)
+    env = make_pga_env(horizon=20)
+    assert env.observation_space.shape == (6 + PGA.top_k + 3,)
+    trace, info = rollout(env, seed=3)
+    assert len(trace) - 1 == 20 * 3
+    rewards = [r for _, r in trace[1:]]
+    assert all(r == 0.0 for i, r in enumerate(rewards) if i % 3 != 2)
+    assert info["episode_metrics"]["blocks"] == 20
+    assert all(env.observation_space.contains(o) for o, _ in trace[1:])
+
+
+def test_pga_env_matches_runner_with_fixed_fraction_agent():
+    _, info = rollout(make_pga_env(horizon=40), seed=9, fraction=0.75)
+    rows, ep = run_episode(PGA, ["greedy", "random", "rule_based"], PARAMS, 40, seed=9)
+    assert [r["profit"] for r in info["agent_metrics"]] == [r["profit"] for r in rows]
+    assert info["episode_metrics"] == ep
+
+
+def test_sealed_obs_size_unchanged():
+    assert make_env().observation_space.shape == (6 + SimConfig().top_k,)

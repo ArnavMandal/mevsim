@@ -17,3 +17,5 @@ initial_balance: 100.0
 p_see: 0.8
 obs_noise_std: 0.1
 top_k: 5
+mechanism: sealed_first_price  # sealed_first_price | sealed_second_price | pga
+pga_rounds: 5              # bidding rounds per block under pga

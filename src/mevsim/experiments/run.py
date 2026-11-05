@@ -93,11 +93,16 @@ def run_episode(
     sim, agents = seeded_episode(sim_config, lineup, agent_params, seed)
     config = sim.config
     recorder = EpisodeRecorder(config.n_agents, config.gas_limit)
+
+    def collect() -> list:
+        return [b for agent in agents for b in agent.act(sim.observe(agent.index))]
+
     for _ in range(horizon):
-        bids = [b for agent in agents for b in agent.act(sim.observe(agent.index))]
         active = dict(sim.opportunities.active)
-        result = sim.step(bids)
-        recorder.record(bids, active, result, sim.mempool.pending_gas)
+        for _ in range(config.n_rounds - 1):  # PGA rounds before the final one
+            sim.bid_round(collect())
+        result = sim.step(collect())
+        recorder.record(result.bids, active, result, sim.mempool.pending_gas)
     rows = recorder.agent_summaries()
     for row, kind in zip(rows, lineup, strict=True):
         row["agent_type"] = kind

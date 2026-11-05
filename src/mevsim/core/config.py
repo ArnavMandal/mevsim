@@ -16,6 +16,7 @@ class SimConfig:
     gas_limit: int = 30
     n_agents: int = 3
     mechanism: str = "sealed_first_price"
+    pga_rounds: int = 5
     organic_rate: float = 6.0
     organic_gas_min: int = 1
     organic_gas_max: int = 4
@@ -41,6 +42,15 @@ class SimConfig:
         if unknown:
             raise ValueError(f"unknown config keys: {sorted(unknown)}")
         return cls(**d)
+
+    def __post_init__(self) -> None:
+        if self.pga_rounds < 1:
+            raise ValueError("pga_rounds must be >= 1")
+
+    @property
+    def n_rounds(self) -> int:
+        """Bidding rounds per block: `pga_rounds` under PGA, otherwise one sealed round."""
+        return self.pga_rounds if self.mechanism == "pga" else 1
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> SimConfig:

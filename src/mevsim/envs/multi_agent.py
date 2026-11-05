@@ -21,7 +21,8 @@ class MultiAgentMEVEnv(ParallelEnv):
     Every learner has the single-agent env's observation, action (one bid fraction in
     [0, 1]) and reward (its own profit per block). Social welfare is reported, not
     rewarded: the final step's infos carry the episode metrics, including the split of
-    captured MEV between agents and the builder. Seeding matches `SingleAgentMEVEnv`.
+    captured MEV between agents and the builder. Seeding matches `SingleAgentMEVEnv`,
+    and so does PGA handling (one env step per bidding round, zero reward until the last).
     """
 
     metadata = {"name": "mevsim_multi_v0", "render_modes": []}
@@ -88,9 +89,14 @@ class MultiAgentMEVEnv(ParallelEnv):
             bids += [Bid(i, o.id, fraction * o.value) for o in obs.visible_opportunities]
         for agent in self.opponent_agents:
             bids += agent.act(self.sim.observe(agent.index))
+        if self.sim.round < self.sim.config.n_rounds - 1:  # intermediate PGA round
+            self.sim.bid_round(bids)
+            zeros = {a: 0.0 for a in self.agents}
+            no = {a: False for a in self.agents}
+            return self._observe(), zeros, no, dict(no), {a: {} for a in self.agents}
         active = dict(self.sim.opportunities.active)
         result = self.sim.step(bids)
-        self.recorder.record(bids, active, result, self.sim.mempool.pending_gas)
+        self.recorder.record(result.bids, active, result, self.sim.mempool.pending_gas)
 
         done = self.sim.step_index >= self.horizon
         obs = self._observe()

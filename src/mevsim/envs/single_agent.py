@@ -17,17 +17,20 @@ _TRAIN_SEED_LOW = 2**20  # training episodes draw seeds at or above this; keep e
 
 
 def obs_size(config: SimConfig) -> int:
-    return 6 + config.top_k
+    return 6 + config.top_k + (3 if config.mechanism == "pga" else 0)
 
 
 def featurize(obs: Observation, config: SimConfig, horizon: int) -> np.ndarray:
     """Normalized observation vector, every entry clipped to [0, OBS_CLIP].
 
     Layout: balance gain, best visible value, top-k fees, pending gas fraction, last
-    clearing price, last block's mean winning payment/value, step fraction.
+    clearing price, last block's mean winning payment/value, step fraction. Under PGA three
+    more entries follow, about the best visible opportunity: current top bid / value,
+    whether this agent leads it (0/1), and the round fraction.
     """
     fee_scale = config.organic_fee_scale
-    best = max((o.value for o in obs.visible_opportunities), default=0.0)
+    best_opp = max(obs.visible_opportunities, key=lambda o: o.value, default=None)
+    best = best_opp.value if best_opp is not None else 0.0
     ratios = [p / v for v, p in obs.last_block_captures if v > 0]
     x = np.array(
         [
@@ -41,6 +44,13 @@ def featurize(obs: Observation, config: SimConfig, horizon: int) -> np.ndarray:
         ],
         dtype=np.float32,
     )
+    if config.mechanism == "pga":
+        top_ratio = leading = 0.0
+        if best_opp is not None and best_opp.value > 0:
+            top_ratio = obs.top_bids.get(best_opp.id, 0.0) / best_opp.value
+            leading = float(best_opp.id in obs.leading)
+        round_frac = obs.round / max(obs.n_rounds - 1, 1)
+        x = np.append(x, np.array([top_ratio, leading, round_frac], dtype=np.float32))
     return np.clip(x, 0.0, OBS_CLIP)
 
 
@@ -49,9 +59,11 @@ class SingleAgentMEVEnv(gym.Env):
 
     Action: `bid_fraction` in [0, 1], applied to every visible opportunity (0 = skip).
     Reward: the learner's profit this block (captured value minus payment).
-    Episodes last `horizon` blocks. `reset(seed=s)` builds the episode exactly as the
-    experiment runner does for seed `s`; later seedless resets draw fresh episode seeds
-    from the env's generator. The final step's `info` carries the episode metrics.
+    Episodes last `horizon` blocks. Under PGA one env step is one bidding round, so an
+    episode is `horizon * n_rounds` steps and reward arrives on each block's final round.
+    `reset(seed=s)` builds the episode exactly as the experiment runner does for seed `s`;
+    later seedless resets draw fresh episode seeds from the env's generator.
+    The final step's `info` carries the episode metrics.
     """
 
     metadata = {"render_modes": []}
@@ -96,9 +108,13 @@ class SingleAgentMEVEnv(gym.Env):
         bids = [Bid(0, o.id, fraction * o.value) for o in self._obs.visible_opportunities]
         for agent in self.opponent_agents:
             bids += agent.act(self.sim.observe(agent.index))
+        if self.sim.round < self.sim.config.n_rounds - 1:  # intermediate PGA round
+            self.sim.bid_round(bids)
+            self._obs = self.sim.observe(0)
+            return featurize(self._obs, self.sim.config, self.horizon), 0.0, False, False, {}
         active = dict(self.sim.opportunities.active)
         result = self.sim.step(bids)
-        self.recorder.record(bids, active, result, self.sim.mempool.pending_gas)
+        self.recorder.record(result.bids, active, result, self.sim.mempool.pending_gas)
 
         terminated = self.sim.step_index >= self.horizon
         info: dict[str, Any] = {}

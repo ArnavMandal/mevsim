@@ -154,3 +154,32 @@
   happened here: larger N converged faster, plausibly because the competitive pressure is stronger.
 - Surprising: the climb is slow and late at N=2. With two bidders, undercutting is
   rewarded often enough that the gradient toward outbidding is weak until the policy std shrinks.
+
+## 2026-11-04: M5 (in progress) second-price auction + PGA
+
+**What changed**
+- `sealed_second_price`: highest bid wins, pays the second-highest; a sole bidder pays 0 (no
+  reserve). MEV txs are ordered in the block by the winning *bid* (new
+  `Transaction.priority_fee_per_gas`) but charged the payment. Otherwise a sole second-price
+  winner paying 0 would be crowded out of any congested block, which would confound the
+  mechanism comparison.
+- `pga` with `pga_rounds` (default 5): first-price over R binding rounds. `Simulator.bid_round`
+  runs rounds 0..R-2 and `step` the last. Observations add `round`, `top_bids`, and `leading`
+  (sole leader only), and are drawn once per block so visibility can't change between rounds.
+  Ties go to the earliest round; same-round ties are random. With R=1 it reproduces sealed
+  first-price exactly (tested). The rule-based agent outbids the top by `step_up` (capped at
+  `1 - margin`) and updates its EMA once per block. Envs: one step per round, reward on the
+  final round, and 3 extra obs features only under `pga` (sealed obs and M3/M4 runs unchanged).
+- Bid shading now uses each agent's highest bid per opportunity per block (identical for
+  sealed auctions, where each agent bids once).
+
+**Surprising**
+- First version of `leading` counted a tie for the top as leading. Identical rule-based bots
+  then tied in round 0, all thought they led, and never raised: PGA reproduced first-price to
+  the last digit. Counting only a *sole* leader restores the escalation (shading 0.857 -> 0.88
+  at R=2, 0.90 at R=5).
+- Quick baseline check (3 agents, 10 seeds): second-price roughly halves the builder share for
+  random populations (0.68 -> 0.39). But the rule-based bot's EMA tracks *payments*, which are
+  low under second price, so it spirals its bids down to ~0.48 of value. That is a property of
+  the bot, not the mechanism, and worth keeping in mind when reading M5 baselines.
+- Random agents under PGA effectively bid the max of R uniform draws (shading 0.83 at R=5).

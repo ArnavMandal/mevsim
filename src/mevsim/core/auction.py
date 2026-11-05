@@ -70,9 +70,54 @@ class SealedSecondPrice:
         return results
 
 
+def standing_bids(bids: list[Bid]) -> dict[int, dict[int, tuple[float, int]]]:
+    """Each agent's standing PGA bid per opportunity: {opp: {agent: (amount, round)}}.
+
+    Bids are binding, so the standing bid is the agent's highest positive bid in any round;
+    if it bid that amount more than once, the earliest round counts.
+    """
+    standing: dict[int, dict[int, tuple[float, int]]] = defaultdict(dict)
+    for bid in bids:
+        if bid.amount <= 0:
+            continue
+        per_agent = standing[bid.opportunity_id]
+        old = per_agent.get(bid.agent)
+        if old is None or bid.amount > old[0] or (bid.amount == old[0] and bid.round < old[1]):
+            per_agent[bid.agent] = (bid.amount, bid.round)
+    return standing
+
+
+def pga_leaders(per_agent: dict[int, tuple[float, int]]) -> tuple[float, list[int]]:
+    """Top standing amount and the agents holding it from the earliest round (sorted)."""
+    top = max(amt for amt, _ in per_agent.values())
+    first = min(rnd for amt, rnd in per_agent.values() if amt == top)
+    return top, sorted(a for a, (amt, rnd) in per_agent.items() if (amt, rnd) == (top, first))
+
+
+class PriorityGasAuction:
+    """Priority gas auction: open first-price bidding over several rounds within a block.
+
+    Bids carry their round. The highest standing bid wins and pays its own bid. Ties go to
+    whoever reached that amount in the earliest round (like the earlier tx at a given gas
+    price in a real PGA); only ties within the same round are broken at random. The rounds
+    themselves (revealing the top bid between them) are driven by the simulator.
+    """
+
+    def resolve(self, bids: list[Bid], rng: np.random.Generator) -> list[AuctionResult]:
+        results = []
+        standing = standing_bids(bids)
+        for opp_id in sorted(standing):
+            per_agent = standing[opp_id]
+            top, tied = pga_leaders(per_agent)
+            winner = tied[int(rng.integers(len(tied)))] if len(tied) > 1 else tied[0]
+            results.append(AuctionResult(opp_id, winner, top, len(per_agent), top))
+        return results
+
+
 MECHANISMS: dict[str, type] = {
     "sealed_first_price": SealedFirstPrice,
     "sealed_second_price": SealedSecondPrice,
+    "pga": PriorityGasAuction,
 }
 
 

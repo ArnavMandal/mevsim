@@ -67,3 +67,25 @@ def test_rule_based_tracks_winning_ratio_and_caps_at_margin():
 def test_make_agent_rejects_unknown():
     with pytest.raises(ValueError):
         make_agent("oracle", 0, np.random.default_rng(0))
+
+
+def test_rule_based_pga_outbids_top_and_respects_cap():
+    agent = RuleBasedAgent(0, np.random.default_rng(0), margin=0.1, step_up=0.05)
+    obs = obs_with([10.0, 10.0, 10.0])
+    obs.round, obs.n_rounds = 1, 5
+    obs.top_bids = {0: 6.0, 1: 9.5, 2: 6.0}
+    obs.leading = {2}
+    amounts = [b.amount for b in agent.act(obs)]
+    assert amounts[0] == pytest.approx(6.5)  # top/value + step_up
+    assert amounts[1] == pytest.approx(9.0)  # capped at 1 - margin
+    assert amounts[2] == pytest.approx(5.5)  # already leading: base bid (0.5 + 0.05)
+
+
+def test_rule_based_updates_ratio_once_per_block():
+    agent = RuleBasedAgent(0, np.random.default_rng(0), smoothing=0.5, initial_ratio=0.5)
+    obs = obs_with([10.0], captures=[(10.0, 9.0)])
+    agent.act(obs)
+    assert agent.ratio == pytest.approx(0.7)
+    obs.round = 1
+    agent.act(obs)
+    assert agent.ratio == pytest.approx(0.7)

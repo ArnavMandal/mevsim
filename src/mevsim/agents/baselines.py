@@ -61,7 +61,9 @@ class RuleBasedAgent(Agent):
     """Bids just above the recent winning price, keeping a minimum margin.
 
     Tracks an EMA of winning payment / value from the previous block's public captures
-    and bids `ratio + step_up` of value, capped at `1 - margin`.
+    and bids `ratio + step_up` of value, capped at `1 - margin`. Under PGA it also acts
+    as a classic PGA bot: when another agent holds the top bid on an opportunity, it
+    raises to `top + step_up * value` (still capped at `1 - margin` of value).
     """
 
     name = "rule_based"
@@ -88,11 +90,20 @@ class RuleBasedAgent(Agent):
         self.ratio = self.initial_ratio
 
     def act(self, obs: Observation) -> list[Bid]:
-        for value, payment in obs.last_block_captures:
-            if value > 0:
-                a = self.smoothing
-                self.ratio = a * (payment / value) + (1.0 - a) * self.ratio
-        return super().act(obs)
+        if obs.round == 0:  # once per block, not once per PGA round
+            for value, payment in obs.last_block_captures:
+                if value > 0:
+                    a = self.smoothing
+                    self.ratio = a * (payment / value) + (1.0 - a) * self.ratio
+        base = self.bid_fraction(obs)
+        bids = []
+        for o in obs.visible_opportunities:
+            fraction = base
+            if o.id in obs.top_bids and o.id not in obs.leading and o.value > 0:
+                outbid = obs.top_bids[o.id] / o.value + self.step_up
+                fraction = max(base, min(outbid, 1.0 - self.margin))
+            bids.append(Bid(self.index, o.id, fraction * o.value))
+        return bids
 
     def bid_fraction(self, obs: Observation) -> float:
         return float(np.clip(self.ratio + self.step_up, 0.0, 1.0 - self.margin))

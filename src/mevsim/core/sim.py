@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import itertools
+from dataclasses import replace
 
 import numpy as np
 
-from mevsim.core.auction import make_auction
+from mevsim.core.auction import make_auction, pga_leaders, standing_bids
 from mevsim.core.builder import build_block
 from mevsim.core.config import SimConfig
 from mevsim.core.mempool import Mempool
@@ -20,6 +21,11 @@ class Simulator:
     Usage: `reset()`, then repeatedly `observe(i)` for each agent and `step(bids)`.
     After `reset()` and after each `step()`, arrivals for the current step have already
     happened, so observations always reflect the state agents bid against.
+
+    Under PGA each block has `config.n_rounds` bidding rounds: call `bid_round(bids)` for
+    rounds 0..n-2 (re-observing in between to see the top bids), then `step(bids)` for the
+    last round. Each agent's observation is drawn once per block and reused across rounds,
+    so what it can see does not change between rounds.
 
     All randomness comes from `rng`, split into independent child streams (organic
     arrivals, opportunities, auction ties, observations). Separate streams mean that
@@ -46,8 +52,14 @@ class Simulator:
         self.congestion = 0.0
         self.last_clearing_price = 0.0
         self.last_block_captures: list[tuple[float, float]] = []
+        self._new_block()
         self._ready = True
         self._arrive()
+
+    def _new_block(self) -> None:
+        self.round = 0
+        self._round_bids: list[Bid] = []
+        self._obs_cache: dict[int, Observation] = {}
 
     def _arrive(self) -> None:
         self.mempool.arrive(self.step_index, self.congestion)
@@ -55,6 +67,25 @@ class Simulator:
 
     def observe(self, agent: int) -> Observation:
         """Partial, noisy view of the current state for one agent."""
+        if self.config.mechanism != "pga":
+            return self._draw_observation(agent)
+        if agent not in self._obs_cache:
+            self._obs_cache[agent] = self._draw_observation(agent)
+        base = self._obs_cache[agent]
+        top_bids, leading = {}, set()
+        standing = standing_bids(self._round_bids)
+        for opp in base.visible_opportunities:
+            if opp.id in standing:
+                top, leaders = pga_leaders(standing[opp.id])
+                top_bids[opp.id] = top
+                if leaders == [agent]:  # sole leader; a tie is not a safe lead
+                    leading.add(opp.id)
+        return replace(
+            base, round=self.round, n_rounds=self.config.n_rounds, top_bids=top_bids,
+            leading=leading,
+        )  # fmt: skip
+
+    def _draw_observation(self, agent: int) -> Observation:
         c = self.config
         rng = self._obs_rng
         opps = sorted(self.opportunities.active.values(), key=lambda o: o.id)
@@ -77,24 +108,45 @@ class Simulator:
             gas_limit=c.gas_limit,
             last_clearing_price=self.last_clearing_price,
             last_block_captures=list(self.last_block_captures),
+            n_rounds=c.n_rounds,
         )
+
+    def _check_bids(self, bids: list[Bid]) -> None:
+        for bid in bids:
+            if not 0 <= bid.agent < self.config.n_agents:
+                raise ValueError(f"bid from unknown agent {bid.agent}")
+
+    def bid_round(self, bids: list[Bid]) -> None:
+        """Submit one non-final PGA round. Bids are binding and become public as top bids."""
+        if not self._ready:
+            raise RuntimeError("call reset() before bid_round()")
+        if self.round >= self.config.n_rounds - 1:
+            raise RuntimeError("no intermediate rounds left; call step() for the final round")
+        self._check_bids(bids)
+        active = self.opportunities.active
+        self._round_bids += [
+            replace(b, round=self.round) for b in bids if b.opportunity_id in active
+        ]
+        self.round += 1
 
     def step(self, bids: list[Bid]) -> StepResult:
         """Resolve the auction, build the block, pay rewards, then advance one step.
 
         Bids on unknown or expired opportunities are ignored. A winner pays only if its
         tx is actually included; if the block is full the opportunity stays live.
+        Under PGA this is the final round and must follow `n_rounds - 1` `bid_round` calls.
         """
         if not self._ready:
             raise RuntimeError("call reset() before step()")
         c = self.config
         step = self.step_index
-        for bid in bids:
-            if not 0 <= bid.agent < c.n_agents:
-                raise ValueError(f"bid from unknown agent {bid.agent}")
+        if self.round != c.n_rounds - 1:
+            raise RuntimeError(f"step() called in round {self.round} of {c.n_rounds}")
+        self._check_bids(bids)
 
         active = self.opportunities.active
-        valid = [b for b in bids if b.opportunity_id in active]
+        final = [replace(b, round=self.round) for b in bids]
+        valid = self._round_bids + [b for b in final if b.opportunity_id in active]
         results = self.auction.resolve(valid, self._auction_rng)
 
         agent_txs = [
@@ -134,6 +186,8 @@ class Simulator:
         self.last_clearing_price = block.clearing_price
         self.last_block_captures = block_captures
 
+        all_bids = self._round_bids + final
         self.step_index += 1
+        self._new_block()
         self._arrive()
-        return StepResult(block, results, captured, rewards)
+        return StepResult(block, results, captured, rewards, all_bids)

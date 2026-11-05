@@ -51,13 +51,21 @@ class EpisodeRecorder:
         result: StepResult,
         pending_gas: float,
     ) -> None:
-        """Log one step. `opportunities` are those active when bids were placed."""
+        """Log one step. `opportunities` are those active when bids were placed.
+
+        Bid shading uses each agent's highest bid per opportunity (its standing bid after
+        all PGA rounds; with one sealed bid each, simply that bid).
+        """
         self.steps += 1
+        best: dict[tuple[int, int], float] = {}
         for b in bids:
-            opp = opportunities.get(b.opportunity_id)
+            key = (b.agent, b.opportunity_id)
+            best[key] = max(best.get(key, -np.inf), b.amount)
+        for (agent, opp_id), amount in best.items():
+            opp = opportunities.get(opp_id)
             if opp is not None and opp.value > 0:
-                self.bid_on[b.agent].add(opp.id)
-                self.bid_ratios[b.agent].append(b.amount / opp.value)
+                self.bid_on[agent].add(opp.id)
+                self.bid_ratios[agent].append(amount / opp.value)
         for i, r in enumerate(result.rewards):
             self.profit[i] += r
         for tx in result.block.txs:

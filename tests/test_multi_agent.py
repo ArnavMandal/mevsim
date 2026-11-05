@@ -108,3 +108,20 @@ def test_config_rejects_unknown_key(tmp_path):
     p.write_text(CONFIG.replace("n_envs: 1", "n_env: 1"))
     with pytest.raises(ValueError):
         MultiPPOConfig.from_yaml(p)
+
+
+PGA = SimConfig(mechanism="pga", pga_rounds=3)
+
+
+def test_pga_parallel_api():
+    parallel_api_test(MultiAgentMEVEnv(PGA, 2, ["rule_based"], horizon=20), num_cycles=100)
+
+
+def test_pga_matches_runner_with_fixed_fraction_learners():
+    env = MultiAgentMEVEnv(PGA, 2, ["random", "rule_based"], PARAMS, horizon=40)
+    trace, infos = rollout(env, seed=11)
+    assert len(trace) == 40 * 3
+    info = infos["agent_0"]
+    rows, ep = run_episode(PGA, ["greedy", "greedy", "random", "rule_based"], PARAMS, 40, seed=11)
+    assert info["episode_metrics"] == ep
+    assert [r["profit"] for r in info["agent_metrics"]] == [r["profit"] for r in rows]
